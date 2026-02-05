@@ -89,8 +89,6 @@ return function(runTime): types.executor
 				local lastEvaluated: value.value<any> = value.nilValue()
 				local startTime = tick()
 				while true do
-					local executionStart = tick()
-					
 					local tempEnvironment = environmentConstructor(environment)
 					conditionValue = self:interpretAST(node.condition)
 					doCondition = conditionValue.value and conditionValue.valueType ~= "nil"
@@ -104,7 +102,7 @@ return function(runTime): types.executor
 						continue
 					end
 					
-					if tick() - startTime > self.runTime.statementTimeoutLength and not tick() - executionStart > 1/15 then
+					if tick() - startTime > self.runTime.statementTimeoutLength then
 						return self.runTime:runTimeError("timeoutError", `While statement timed out, took more than {self.runTime.statementTimeoutLength} seconds to execute.`)
 					end
 				end
@@ -137,8 +135,6 @@ return function(runTime): types.executor
 			local startTime = tick()
 			local lastEvaluated = value.nilValue()
 			while true do
-				local executionStart = tick()
-				
 				local arguments: {value.value<any>} = table.pack(iterator())
 				if #arguments < 1 then break end
 				
@@ -158,7 +154,7 @@ return function(runTime): types.executor
 					continue
 				end
 				
-				if tick() - startTime > self.runTime.statementTimeoutLength and not tick() - executionStart > 1/15 then
+				if tick() - startTime > self.runTime.statementTimeoutLength then
 					return self.runTime:runTimeError("timeoutError", `While statement timed out, took more than {self.runTime.statementTimeoutLength} seconds to execute.`)
 				end
 			end

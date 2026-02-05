@@ -188,7 +188,7 @@ return function(runTime): types.parser
 					end
 					
 					if not self.token:is("RBRACKET") then
-						return self.runTime:runTimeError("syntaxError", `Expected closed brackets for if statement code block, got {self.token.tokenType}({self.token.tokenValue})`)
+						return self.runTime:runTimeError("syntaxError", `Expected closed brackets for else clause code block, got {self.token.tokenType}({self.token.tokenValue})`)
 					end
 					self:advance()
 					
@@ -205,7 +205,7 @@ return function(runTime): types.parser
 					if not self.token:is("RPAREN") then
 						return self.runTime:runTimeError("syntaxError", `Expected closed parenthesis, got {self.token.tokenType}({self.token.tokenValue})`)
 					end
-					
+					self:advance()
 					self:advance()
 
 					local body: {nodes.node} = {}
@@ -214,7 +214,7 @@ return function(runTime): types.parser
 					end
 
 					if not self.token:is("RBRACKET") then
-						return self.runTime:runTimeError("syntaxError", `Expected closed brackets for if statement code block, got {self.token.tokenType}({self.token.tokenValue})`)
+						return self.runTime:runTimeError("syntaxError", `Expected closed brackets for elseif clause code block, got {self.token.tokenType}({self.token.tokenValue})`)
 					end
 					self:advance()
 					
@@ -580,14 +580,14 @@ return function(runTime): types.parser
 			elseif token.tokenValue == "return" then
 				self:advance()
 				local expr = nil
-				if self.token and not self.token:is("RBRACKET") and not self.token:is("EOF") then
+				if self.token and not self.token:is("RBRACKET") and not self.token:is("EOF") and not self.token:is("RPAREN") then
 					expr = self:createStatement()
 				end
 				return nodes.returnStatement(expr)
 			elseif token.tokenValue == "break" then
 				self:advance()
 				local expr = nil
-				if self.token and not self.token:is("RBRACKET") and not self.token:is("EOF") then
+				if self.token and not self.token:is("RBRACKET") and not self.token:is("EOF") and not self.token:is("RPAREN") then
 					expr = self:createStatement()
 				end
 				return nodes.breakStatement(expr)
