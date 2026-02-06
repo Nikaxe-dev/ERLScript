@@ -1,4 +1,4 @@
-# [ERLScript] [V1.1] - Interpreted lua-like programming language
+# [ERLScript] [V1.2] - Interpreted lua-like programming language
 
 ERLScript is a programming language designed to be easily executed in roblox, being decently customizable & able to be ran multiple times in a single script. Please expect bugs, as this is a new type of project for me, and has been done in my free time.
 
