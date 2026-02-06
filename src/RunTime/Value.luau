@@ -84,7 +84,7 @@ module.tableValue = function(content: any): tableValue
 	--return useReference and value("function", runTime.valueReferences[content]) or value("function", module.tableReference(runTime, content))
 end
 
-export type luaFunctionValue = value<(...value<any>) -> any>
+export type luaFunctionValue = value<(...value<any>) -> any> & {takesSelf: boolean, usesLuaTypes: boolean, self: value<any>}
 module.luaFunctionValue = function(fun: (...any) -> any): luaFunctionValue
 	return value("luaFunction", fun)
 end
@@ -99,6 +99,46 @@ module.continueSignal = function()
 	return value("continueSignal")
 end
 
+export type instanceValue = value<Instance>
+module.instanceValue = function(instance: Instance): instanceValue
+	local res: instanceValue = value("instance", instance)
+	function res:toString()
+		return res.value:GetFullName()
+	end
+	return res
+end
+
+export type vector3Value = value<Vector3>
+module.vector3Value = function(vector: Vector3)
+	return value("vector3", vector)
+end
+
+export type vector2Value = value<Vector2>
+module.vector2Value = function(vector: Vector2)
+	return value("vector2", vector)
+end
+
+export type udim2Value = value<UDim2>
+module.udim2Value = function(udim2: UDim2)
+	return value("udim2", udim2)
+end
+
+export type udimValue = value<UDim2>
+module.udimValue = function(udim: UDim)
+	return value("udim", udim)
+end
+
+export type color3Value = value<Color3>
+module.color3Value = function(color: Color3)
+	return value("color3", color)
+end
+
+export type cframeValue = value<CFrame>
+module.cframeValue = function(cframe: CFrame)
+	return value("cframe", cframe)
+end
+
+module.tableTypes = {"table","instance","vector3","vector2","udim2","udim","color3"}
 module.fromLuauValue = function(value: any, runTime: any?): value<any>
 	local type = typeof(value)
 	if type == "string" then
@@ -115,15 +155,40 @@ module.fromLuauValue = function(value: any, runTime: any?): value<any>
 	end
 	if type == "table" then
 		local newTable = {}
-		for i, v in ipairs(value) do
-			table.insert(newTable, module.fromLuauValue(v, runTime))
-		end
 		for n, v in pairs(value) do
-			newTable[n] = module.fromLuauValue(v, runTime)
+			newTable[n] = module.fromLuauValue(v)
 		end
-		return module.tableValue(runTime, newTable)
+		return module.tableValue(newTable)
+	end
+	if type == "Instance" then
+		return module.instanceValue(value)
+	end
+	if type == "Vector3" then
+		return module.vector3Value(value)
+	end
+	if type == "Vector2" then
+		return module.vector2Value(value)
+	end
+	if type == "UDim2" then
+		return module.udim2Value(value)
+	end
+	if type == "UDim" then
+		return module.udimValue(value)
+	end
+	if type == "Color3" then
+		return module.color3Value(value)
+	end
+	if type == "CFrame" then
+		return module.cframeValue(value)
 	end
 	return module.nilValue()
+end
+
+module.toLuauValue = function(value: value<any>): any
+	if table.find({"string","boolean","number","nil","luaFunction","vector3","vector2","udim2","udim","color3","instance"}, value.valueType) then
+		return value.value
+	end
+	return value
 end
 
 return module

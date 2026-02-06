@@ -1,609 +1,382 @@
-local types = require("./RunTimeTypes")
-local value = require("./Value")
-local nodes = require("@self/Nodes")
-local environment = require("./Environment")
+local types = require("@self/RunTimeTypes")
+local lexer = require("@self/Lexer")
+local executor = require("@self/Executor")
+local runTimeSettings = require("@self/RunTimeSettings")
+local value = require("@self/Value")
+local parser = require("@self/Parser")
+local environment = require("@self/Environment")
 
-return function(runTime): types.parser
-	local parser: types.parser = {
-		runTime = runTime,
+local function wrapperFunction(wrapper: (value: any) -> value.value<any>, value: any)
+	return function()
+		return wrapper(value)
+	end
+end
 
-		tokens = {},
-		token = nil,
-		position = 0,
-		stringCharacter = nil,
+return function(settings: types.runTimeSettings)
+	local runTime: types.runTime = {
+		settings = settings or runTimeSettings(),
+		keywords = {"var", "function", "return", "if", "else", "elseif", "while", "for", "break", "continue"},
+		
+		statementTimeoutLength = 7.5,
 	}
-
-	function parser:advance()
-		if self.position == #self.tokens then
-			self.token = nil
-			return
-		end
-
-		self.position += 1
-		self.token = self.tokens[self.position]
-
-		return self.token
-	end
-
-	function parser:parseTokens(tokens: {types.token}): nodes.programRoot
-		self.tokens = tokens
-		self.position = 0
-		self.token = self:advance()
-		self.stringCharacter = nil
-		
-		local program = nodes.programRoot({})
-		
-		while not self.token:is("EOF") do
-			table.insert(program.body, self:createStatement())
-		end
-		
-		return program
-	end
+	runTime.lexer = lexer(runTime)
+	runTime.executor = executor(runTime)
+	runTime.parser = parser(runTime)
+	runTime.environment = environment()
 	
-	function parser:parseForStatement()
-		if self.token:is("KEYWORD") and self.token.tokenValue == "for" then
-			self:advance()
-			if not self.token:is("LPAREN") then
-				return self.runTime:runTimeError("syntaxError", `Expected open parenthesis to start for statement parameters, got {self.token.tokenType}({self.token.tokenValue})`)
+	function runTime:setGlobalScopeVariables()
+		self.environment:declareVariable("VERSION", value.stringValue("1.1"))
+		
+		self.environment:declareVariable("print", value.luaFunctionValue(function(...: value.value<any>)
+			local text = ""
+			for i, v in ipairs(table.pack(...)) do
+				text ..= v:toString() .. " "
 			end
-			
-			self:advance()
-			local parameters: {string} = {}
-			if not self.token:is("RPAREN") then
-				if self.token:is("IDENTIFIER") then
-					table.insert(parameters, self.token.tokenValue)
-					self:advance()
-					while not self.token:is("EOF") and not self.token:is("RPAREN") and self.token:is("COMMA") do
-						self:advance()
-						if self.token:is("IDENTIFIER") then
-							table.insert(parameters, self.token.tokenValue)
-						else
-							return self.runTime:runTimeError("syntaxError", `Expected identifier in for statement parameters, got {self.token.tokenType}({self.token.tokenValue})`)
-						end
-						self:advance()
+			print(text)
+			return value.stringValue(text)
+		end))
+
+		self.environment:declareVariable("warn", value.luaFunctionValue(function(...: value.value<any>)
+			local text = ""
+			for i, v in ipairs(table.pack(...)) do
+				text ..= v:toString() .. " "
+			end
+			warn(text)
+			return value.stringValue(text)
+		end))
+
+		self.environment:declareVariable("error", value.luaFunctionValue(function(...: value.value<any>)
+			local text = ""
+			for i, v in ipairs(table.pack(...)) do
+				text ..= v:toString() .. " "
+			end
+			error(text)
+			return value.stringValue(text)
+		end))
+		
+		self.environment:declareVariable("math", value.tableValue({
+			abs = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.abs(number.value))
+			end),
+			acos = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.acos(number.value))
+			end),
+			asin = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.asin(number.value))
+			end),
+			atan = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.atan(number.value))
+			end),
+			atan2 = value.luaFunctionValue(function(x: value.numberValue, y: value.numberValue)
+				return value.numberValue(math.atan2(x.value,y.value))
+			end),
+			ceil = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.ceil(number.value))
+			end),
+			clamp = value.luaFunctionValue(function(x: value.numberValue, min: value.numberValue, max: value.numberValue)
+				return value.numberValue(math.clamp(x.value, min.value, max.value))
+			end),
+			cos = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.cos(number.value))
+			end),
+			cosh = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.cosh(number.value))
+			end),
+			deg = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.deg(number.value))
+			end),
+			exp = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.exp(number.value))
+			end),
+			floor = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.floor(number.value))
+			end),
+			fmod = value.luaFunctionValue(function(x: value.numberValue, y: value.numberValue)
+				return value.numberValue(math.fmod(x.value, y.value))
+			end),
+			frexp = value.luaFunctionValue(function(number: value.numberValue)
+				return value.numberValue(math.frexp(number.value))
+			end),
+			ldexp = value.luaFunctionValue(function(x: value.numberValue, e: value.numberValue)
+				return value.numberValue(math.ldexp(x.value, e.value))
+			end),
+			lerp = value.luaFunctionValue(function(a: value.numberValue, b: value.numberValue, t: value.numberValue)
+				return value.numberValue(math.lerp(a.value, b.value, t.value))
+			end),
+			log = value.luaFunctionValue(function(x: value.numberValue, base: value.numberValue)
+				return value.numberValue(math.log(x.value, base.value))
+			end),
+			log10 = value.luaFunctionValue(function(x: value.numberValue)
+				return value.numberValue(math.log10(x.value))
+			end),
+			map = value.luaFunctionValue(function(x: value.numberValue, inmin: value.numberValue, inmax: value.numberValue, outmin: value.numberValue, outmax: value.numberValue)
+				return value.numberValue(math.map(x.value, inmin.value, inmax.value, outmin.value, outmax.value))
+			end),
+			max = value.luaFunctionValue(function(x: value.numberValue, ...: value.numberValue)
+				local biggest = x
+				for i, v in ipairs(table.pack(...)) do
+					if v.value > biggest.value then
+						biggest = v
 					end
+				end
+				return biggest
+			end),
+			min = value.luaFunctionValue(function(x: value.numberValue, ...: value.numberValue)
+				local smallest = x
+				for i, v in ipairs(table.pack(...)) do
+					if v.value < smallest.value then
+						smallest = v
+					end
+				end
+				return smallest
+			end),
+			modf = value.luaFunctionValue(function(x: value.numberValue)
+				return value.numberValue(math.modf(x.value))
+			end),
+			noise = value.luaFunctionValue(function(x: value.numberValue, y: value.numberValue, z: value.numberValue)
+				return value.numberValue(math.noise(x.value, y.value, z.value))
+			end),
+			pow = value.luaFunctionValue(function(x: value.numberValue, y: value.numberValue)
+				return value.numberValue(math.pow(x.value, y.value))
+			end),
+			rad = value.luaFunctionValue(function(x: value.numberValue)
+				return value.numberValue(math.rad(x.value))
+			end),
+			random = value.luaFunctionValue(function(m: value.numberValue, n: value.numberValue)
+				return value.numberValue(math.random(m.value, n.value))
+			end),
+			randomseed = value.luaFunctionValue(function(seed: value.numberValue)
+				return value.numberValue(math.randomseed(seed.value))
+			end),
+			round = value.luaFunctionValue(function(x: value.numberValue)
+				return value.numberValue(math.round(x.value))
+			end),
+			sign = value.luaFunctionValue(function(x: value.numberValue)
+				return value.numberValue(math.sign(x.value))
+			end),
+			sin = value.luaFunctionValue(function(x: value.numberValue)
+				return value.numberValue(math.sin(x.value))
+			end),
+			sinh = value.luaFunctionValue(function(x: value.numberValue)
+				return value.numberValue(math.sinh(x.value))
+			end),
+			sqrt = value.luaFunctionValue(function(x: value.numberValue)
+				return value.numberValue(math.sqrt(x.value))
+			end),
+			tan = value.luaFunctionValue(function(x: value.numberValue)
+				return value.numberValue(math.tan(x.value))
+			end),
+			tanh = value.luaFunctionValue(function(x: value.numberValue)
+				return value.numberValue(math.tanh(x.value))
+			end),
+			huge = value.numberValue(math.huge),
+			pi = value.numberValue(math.pi),
+		}))
+		
+		self.environment:declareVariable("iterator", value.tableValue({
+			table = value.luaFunctionValue(function(tableQuery: value.tableValue)
+				local entries: {string | number} = {}
+				for n, v in pairs(tableQuery.value) do
+					table.insert(entries, n)
+				end
+				
+				local index = 0
+				return value.luaFunctionValue(function()
+					index += 1
+					if index <= #entries then
+						local tableEntity = tableQuery.value[entries[index]]
+						return type(entries[index]) == "string" and value.stringValue(entries[index]) or value.numberValue(entries[index]), tableEntity, value.numberValue(index)
+					end
+				end)
+			end),
+			
+			string = value.luaFunctionValue(function(stringQuery: value.stringValue)
+				local index = 0
+				return value.luaFunctionValue(function()
+					index += 1
+					if index <= #stringQuery.value then
+						return value.numberValue(index), value.stringValue(string.sub(stringQuery.value, index, index))
+					end
+				end)
+			end),
+			
+			number = value.luaFunctionValue(function(numberQuery: value.numberValue)
+				local index = 0
+				return value.luaFunctionValue(function()
+					index += 1
+					if index <= numberQuery.value then
+						return value.numberValue(index)
+					end
+				end)
+			end)
+		}))
+		
+		self.environment:declareVariable("table", value.tableValue({
+			clear = value.luaFunctionValue(function(tableQuery: value.tableValue)
+				table.clear(tableQuery)
+				return tableQuery
+			end),
+			
+			clone = value.luaFunctionValue(function(tableQuery: value.tableValue)
+				return value.tableValue(tableQuery.value)
+			end),
+			
+			concat = value.luaFunctionValue(function(tableQuery: value.tableValue, seperator: value.stringValue, i: value.numberValue, j: value.numberValue)
+				i = i and i.value or 1
+				j = j and math.min(j.value, #tableQuery.value) or #tableQuery.value
+				local text = ""
+				for index=i,j do
+					if index > j then break end
+					text ..= tableQuery.value[index]:toString()
+					if index ~= j then
+						text ..= seperator.value
+					end
+				end
+				return value.stringValue(text)
+			end),
+			
+			find = value.luaFunctionValue(function(haystack: value.tableValue, needle: value.value<any>, init: number)
+				init = init.value or 1
+				local index = 0
+				for name, value in pairs(haystack.value) do
+					index += 1
+					if index < init then continue end
+					if name == needle.value then
+						return value
+					end
+				end
+			end),
+			
+			insert = value.luaFunctionValue(function(tableQuery: value.tableValue, value: value.value<any>, position: value.numberValue)
+				if position then
+					table.insert(tableQuery.value, position, value)
 				else
-					return self.runTime:runTimeError("syntaxError", `Expected identifier in for statement parameters, got {self.token.tokenType}({self.token.tokenValue})`)
+					table.insert(tableQuery.value, value)
 				end
-			end
+			end),
 			
-			if not self.token:is("RPAREN") then
-				return self.runTime:runTimeError("syntaxError", `Expected closed parenthesis to end for statement parameters, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
+			parameters = value.luaFunctionValue(function(fun: value.luaFunctionValue, tableQuery: value.tableValue, ...: value.value<any>)
+				local a = table.clone(tableQuery.value)
+				for i, v in ipairs(table.pack(...)) do
+					table.insert(a, v)
+				end
+				
+				if fun.valueType == "function" then
+					return self.executor:executeFunctionBody(fun.body, fun.parameters, a, fun.environment)
+				elseif fun.valueType == "luaFunction" then
+					return fun.value(table.unpack(a))
+				end
+				return value.nilValue()
+			end),
 			
-			self:advance()
-			if not self.token:is("LPAREN") then
-				return self.runTime:runTimeError("syntaxError", `Expected opened parenthesis to start for statement loop object, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
-			self:advance()
+			entries = value.luaFunctionValue(function(tableQuery: value.tableValue)
+				local entries: {any} = {}
+				for n,_ in pairs(tableQuery.value) do
+					table.insert(entries, n)
+				end
+				for i,name in ipairs(entries) do
+					if type(name) == "string" or type(name) == "number" then
+						entries[i] = (type(name) == "string" and value.stringValue or value.numberValue)(name)
+					end
+				end
+				return value.tableValue(entries)
+			end),
 			
-			local loopObject = self:createStatement()
+			len = value.luaFunctionValue(function(tableQuery: value.tableValue)
+				return value.numberValue(#tableQuery.value)
+			end)
+		}))
+		
+		runTime.environment:declareVariable("Vector3", value.tableValue({
+			new = value.luaFunctionValue(function(x: value.numberValue, y: value.numberValue, z: value.numberValue)
+				x = x or value.numberValue(0)
+				y = y or value.numberValue(0)
+				z = z or value.numberValue(0)
+				return value.vector3Value(Vector3.new(x.value, y.value, z.value))
+			end)
+		}))
+		
+		runTime.environment:declareVariable("Vector2", value.tableValue({
+			new = value.luaFunctionValue(function(x: value.numberValue, y: value.numberValue)
+				x = x or value.numberValue(0)
+				y = y or value.numberValue(0)
+				return value.vector3Value(Vector2.new(x.value, y.value))
+			end)
+		}))
+		
+		runTime.environment:declareVariable("UDim2", value.tableValue({
+			new = value.luaFunctionValue(function(xScale: value.numberValue, xOffset: value.numberValue, yScale: value.numberValue, yOffset: value.numberValue)
+				xScale = xScale and xScale.value or 0
+				xOffset = xOffset and xOffset.value or 0
+				yScale = yScale and yScale.value or 0
+				yOffset = yOffset and yOffset.value or 0
+				return value.udim2Value(UDim2.new(xScale, xOffset, yScale, yOffset))
+			end),
 			
-			if not self.token:is("RPAREN") then
-				return self.runTime:runTimeError("syntaxError", `Expected closed parenthesis to end for statement loop object, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
-			self:advance()
+			fromScale = value.luaFunctionValue(function(xScale: value.numberValue, yScale: value.numberValue)
+				xScale = xScale and xScale.value or 0
+				yScale = yScale and yScale.value or 0
+				return value.udim2Value(UDim2.fromScale(xScale, yScale))
+			end),
 			
-			if not self.token:is("LBRACKET") then
-				return self.runTime:runTimeError("syntaxError", `Expected opened bracket to start for statement code block, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
-			self:advance()
+			fromOffset = value.luaFunctionValue(function(xOffset: value.numberValue, yOffset: value.numberValue)
+				xOffset = xOffset and xOffset.value or 0
+				yOffset = yOffset and yOffset.value or 0
+				return value.udim2Value(UDim2.fromOffset(xOffset, yOffset))
+			end)
+		}))
+		
+		runTime.environment:declareVariable("UDim", value.tableValue({
+			new = value.luaFunctionValue(function(scale: value.numberValue, offset: value.numberValue)
+				scale = scale and scale.value or 0
+				offset = offset and offset.value or 0
+				return value.udimValue(UDim.new(scale,offset))
+			end)
+		}))
+		
+		if runTime.settings.allowInstances then
+			runTime.environment:declareVariable("Instance", value.tableValue({
+				new = value.luaFunctionValue(function(instanceType: value.stringValue, parent: value.instanceValue)
+					return value.instanceValue(Instance.new(instanceType.value, parent and parent.value or parent))
+				end)
+			}))
 			
-			local body: {nodes.node} = {}
-			while not self.token:is("EOF") and not self.token:is("RBRACKET") do
-				table.insert(body, self:createStatement())
-			end
-			
-			if not self.token:is("RBRACKET") then
-				return self.runTime:runTimeError("syntaxError", `Expected closed brackets for for statement code block, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
-			self:advance()
-			
-			return nodes.forStatement(body, parameters, loopObject)
-		else
-			return self:parseWhileStatement()
+			self.environment:declareVariable("workspace", value.instanceValue(workspace))
+			self.environment:declareVariable("game", value.instanceValue(game))
 		end
-	end
-	
-	function parser:parseWhileStatement()
-		if self.token:is("KEYWORD") and self.token.tokenValue == "while" then
-			-- (while) ( condition ) { body }
-			
-			self:advance()
-			if not self.token:is("LPAREN") then
-				return self.runTime:runTimeError("syntaxError", `Expected open parenthesis to start while statement condition, got {self.token.tokenType}({self.token.tokenValue})`)
+		
+		runTime.environment:declareVariable("requireLUA", value.luaFunctionValue(function(input: value.value<any>)
+			if not runTime.settings.allowRequireLUA then
+				runTime:runTimeError("permissionError", "Not allowed to use requireLUA()")
 			end
 			
-			self:advance()
-			local condition = self:createStatement()
-			if not self.token:is("RPAREN")  then
-				return self.runTime:runTimeError("syntaxError", `Expected closed parenthesis to end while statement condition, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
-			
-			self:advance()
-			if not self.token:is("LBRACKET") then
-				return self.runTime:runTimeError("syntaxError", `Expected open brackets for while statement code block, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
-			self:advance()
-			
-			local body: {nodes.node} = {}
-			while not self.token:is("EOF") and not self.token:is("RBRACKET") do
-				table.insert(body, self:createStatement())
-			end
-			
-			if not self.token:is("RBRACKET") then
-				return self.runTime:runTimeError("syntaxError", `Expected closed brackets for while statement code block, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
-			self:advance()
-			
-			return nodes.whileStatement(condition, body)
-		else
-			return self:parseIfStatement()
-		end
-	end
-	
-	function parser:parseIfStatement()
-		if self.token:is("KEYWORD") and self.token.tokenValue == "if" then
-			local clauses: {nodes.clause} = {}
-			
-			self:advance()
-			if not self.token:is("LPAREN") then
-				return self.runTime:runTimeError("syntaxError", "Expected open parenthesis to start if statement")
-			end
-			self:advance()
-			local condition = self:createStatement()
-			if not self.token:is("RPAREN") then
-				return self.runTime:runTimeError("syntaxError", `Expected closed parenthesis, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
-			
-			self:advance()
-			if not self.token:is("LBRACKET") then
-				return self.runTime:runTimeError("syntaxError", `Expected open brackets for if statement code block, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
-			self:advance()
-			
-			local body: {nodes.node} = {}
-			while not self.token:is("EOF") and not self.token:is("RBRACKET") do
-				table.insert(body, self:createStatement())
-			end
-			
-			if not self.token:is("RBRACKET") then
-				return self.runTime:runTimeError("syntaxError", `Expected closed brackets for if statement code block, got {self.token.tokenType}({self.token.tokenValue})`)
-			end
-			self:advance()
-			
-			table.insert(clauses, nodes.ifClause(body, condition))
-			
-			while not self.token:is("EOF") and self.token:is("KEYWORD") do
-				if self.token.tokenValue == "else" then
-					self:advance()
-					if not self.token:is("LBRACKET") then
-						return self.runTime:runTimeError("syntaxError", `Expected open brackets for if statement code block, got {self.token.tokenType}({self.token.tokenValue})`)
-					end
-					self:advance()
-					
-					local body: {nodes.node} = {}
-					while not self.token:is("EOF") and not self.token:is("RBRACKET") do
-						table.insert(body, self:createStatement())
-					end
-					
-					if not self.token:is("RBRACKET") then
-						return self.runTime:runTimeError("syntaxError", `Expected closed brackets for else clause code block, got {self.token.tokenType}({self.token.tokenValue})`)
-					end
-					self:advance()
-					
-					table.insert(clauses, nodes.elseClause(body))
-					break
-				elseif self.token.tokenValue == "elseif" then
-					self:advance()
-					if not self.token:is("LPAREN") then
-						return self.runTime:runTimeError("syntaxError", `Expected opened parenthesis to start elseif clause, got {self.token.tokenType}({self.token.tokenValue})`)
-					end
-					
-					self:advance()
-					local condition = self:createExpression()
-					if not self.token:is("RPAREN") then
-						return self.runTime:runTimeError("syntaxError", `Expected closed parenthesis, got {self.token.tokenType}({self.token.tokenValue})`)
-					end
-					self:advance()
-					self:advance()
+			local module = require(input.value)
+			return value.fromLuauValue(module, runTime)
+		end))
 
-					local body: {nodes.node} = {}
-					while not self.token:is("EOF") and not self.token:is("RBRACKET") do
-						table.insert(body, self:createStatement())
-					end
-
-					if not self.token:is("RBRACKET") then
-						return self.runTime:runTimeError("syntaxError", `Expected closed brackets for elseif clause code block, got {self.token.tokenType}({self.token.tokenValue})`)
-					end
-					self:advance()
-					
-					table.insert(clauses, nodes.elseIfClause(body, condition))
-				else
-					break
-				end
-			end
-			
-			return nodes.ifStatement(clauses)
-		else
-			return self:createExpression()
-		end
+		self.environment:declareVariable("true", value.booleanValue(true))
+		self.environment:declareVariable("false", value.booleanValue(false))
+		self.environment:declareVariable("nil", value.nilValue())
 	end
 	
-	function parser:createStatement()
-		return self:parseForStatement()
+	runTime:setGlobalScopeVariables()
+	for n, v in pairs(runTime.settings.globals) do
+		runTime.environment:declareVariable(n, value.fromLuauValue(v, runTime))
 	end
 	
-	function parser:createExpression()
-		return self:parseTableExpression()
+	function runTime:execute(code: string)
+		local tokens = self.lexer:process(code)
+		local AST = self.parser:parseTokens(tokens)
+		return self.executor:interpretAST(AST, self.environment)
 	end
 	
-	function parser:parseTableExpression()
-		if not self.token:is("LBRACKET") then
-			return self:parseComparisonExpression()
-		end
-		self:advance()
-		local properties: {[string | number]: nodes.property} = {}
-		while not self.token:is("EOF") and not self.token:is("RBRACKET") do
-			if self.token:is("COMMA") then self:advance() end
-			
-			local compareToken = self.tokens[self.position+1]
-			if compareToken:is("COMPARE") or compareToken.tokenValue == "=" then
-				local identifierToken = self.token
-				self:advance()
-				self:advance()
-				local value = self:createStatement()
-				properties[identifierToken.tokenValue] = nodes.property(identifierToken.tokenValue, value)
-			else
-				local expression = self:createExpression()
-				table.insert(properties, nodes.property(nil, expression))
-			end
-		end
-		
-		if not self.token:is("RBRACKET") then
-			return self.runTime:runTimeError("syntaxError", "Expected closing bracket to end table declaration.")
-		end
-		
-		self:advance()
-		
-		return nodes.tableLiteral(properties)
+	function runTime:runTimeError(errorType: types.error, ...: string)
+		error(`[ERLScript ERROR] {errorType}: {table.concat(table.pack(...))}`)
 	end
 	
-	function parser:parseComparisonExpression()
-		local left = self:parseBooleanExpression()
-		
-		while table.find({"~=","==","<=",">=", ">", "<"}, self.token.tokenValue) do
-			local operator = self.token.tokenValue
-			self:advance()
-			local right = self:parseBooleanExpression()
-			left = nodes.binaryExpression(left, right, operator)
-		end
-		
-		return left
+	function runTime:runTimeWarn(errorType: types.error, ...: string)
+		print(`[ERLScript WARNING] {errorType}: {table.concat(table.pack(...))}`)
 	end
 	
-	function parser:parseBooleanExpression()
-		local left = self:parseAdditiveExpression()
-		
-		while self.token.tokenValue == "and" or self.token.tokenValue == "or" do
-			local operator = self.token.tokenValue
-			self:advance()
-			local right = self:parseAdditiveExpression()
-			left = nodes.binaryExpression(left, right, operator)
-		end
-		
-		return left
-	end
-	
-	function parser:parseAdditiveExpression()
-		local left = self:parseMultiplicitiveExpression()
-		
-		while self.token.tokenValue == "+" or self.token.tokenValue == "-" do
-			local operator = self.token.tokenValue
-			self:advance()
-			local right = self:parseMultiplicitiveExpression()
-			left = nodes.binaryExpression(left, right, operator)
-		end
-		
-		return left
-	end
-	
-	function parser:parseMultiplicitiveExpression()
-		local left = self:parseCallMemberExpression()
-
-		while self.token.tokenValue == "/" or self.token.tokenValue == "*" or self.token.tokenValue == "%" do
-			local operator = self.token.tokenValue
-			self:advance()
-			local right = self:parseCallMemberExpression()
-			left = nodes.binaryExpression(left, right, operator)
-		end
-
-		return left
-	end
-	
-	-- foo.x() foo["x"]()
-	
-	function parser:parseCallMemberExpression()
-		--local member = self:parseMemberExpression()
-		
-		--if self.token:is("LPAREN") then
-		--	return self:parseCallExpression(member)
-		--end
-		
-		--return member
-		
-		local expression = self:parseMemberExpression()
-		
-		while true do
-			if self.token:is("LPAREN") then
-				expression = self:parseCallExpression(expression)
-			elseif self.token:is("DOT") or self.token:is("LBRACE") then
-				local operator = self.token
-				self:advance()
-				
-				local property
-				local computed
-				
-				if operator:is("DOT") then
-					computed = false
-					property = self:parsePrimaryExpression()
-					
-					if not property:is("identifier") then
-						return self.runTime:runTimeError("syntaxError", "Dot operator must be followed by an identifier.")
-					end
-				else
-					computed = true
-					property = self:createExpression()
-					if not self.token:is("RBRACE") then
-						return self.runTime:runTimeError("syntaxError", "Missing closing brace in computed property")
-					end
-					self:advance()
-				end
-				
-				expression = nodes.memberExpression(expression, property, computed)
-			else
-				break
-			end
-		end
-		
-		return expression
-	end
-	
-	function parser:parseCallExpression(caller)
-		local callExpression = nodes.callExpression(self:parseCallArguments(), caller)
-		
-		if self.token:is("LPAREN") then
-			callExpression = self:parseCallExpression(callExpression)
-		end
-		
-		return callExpression
-	end
-	
-	function parser:parseCallArguments()
-		if not self.token:is("LPAREN") then
-			self.runTime:runTimeError("syntaxError", "Expected open parenthesis")
-		end
-		self:advance()
-		local args = self.token:is("RPAREN") and {} or self:parseArgumentsList()
-		if not self.token:is("RPAREN") then
-			self.runTime:runTimeError("syntaxError", "Missing closing parenthesis inside function call")
-		end
-		self:advance()
-		return args
-	end
-	
-	function parser:parseArgumentsList()
-		local args = {self:createStatement()}
-		
-		while not self.token:is("EOF") and self.token:is("COMMA") do
-			self:advance()
-			table.insert(args, self:createStatement())
-		end
-		
-		return args
-	end
-	
-	function parser:parseMemberExpression()
-		local object = self:parsePrimaryExpression()
-		
-		while self.token:is("DOT") or self.token:is("LBRACE") do
-			local operator = self.token
-			self:advance()
-			local property: nodes.expression
-			local computed: boolean
-			
-			if operator:is("DOT") then
-				computed = false
-				property = self:parsePrimaryExpression()
-				
-				local prefixToken = self.tokens[self.position + 1]
-				local assignmentToken = self.token
-				
-				if prefixToken and prefixToken.tokenValue == "=" then
-					prefixToken, assignmentToken = assignmentToken, prefixToken
-				end
-				
-				if assignmentToken and assignmentToken.tokenValue == "=" then
-					local memberExpression = nodes.memberExpression(object, property, computed)
-					
-					if prefixToken:is("OPERATION") then
-						self:advance()
-						self:advance()
-						return nodes.variableAssignment(memberExpression, self:createExpression(), prefixToken.tokenValue)
-					end
-					
-					self:advance()
-					return nodes.variableAssignment(memberExpression, self:createExpression())
-				end
-				
-				if not property:is("identifier") then
-					return self.runTime:runTimeError("syntaxError", "Cannot use dot operator without right side being an identifier.")
-				end
-			else
-				computed = true
-				property = self:createExpression()
-				if not self.token:is("RBRACE") then
-					self.runTime:runTimeError("syntaxError", "Missing closing brace in computed value")
-				end
-				self:advance()
-				
-				local prefixToken = self.tokens[self.position + 1]
-				local assignmentToken = self.token
-				
-				if prefixToken.tokenValue == "=" then
-					prefixToken, assignmentToken = assignmentToken, prefixToken
-				end
-				
-				if assignmentToken.tokenValue == "=" then
-					local memberExpression = nodes.memberExpression(object, property, computed)
-					
-					if prefixToken:is("OPERATION") then
-						self:advance()
-						self:advance()
-						return nodes.variableAssignment(memberExpression, self:createExpression(), prefixToken.tokenValue)
-					end
-					
-					self:advance()
-					return nodes.variableAssignment(memberExpression, self:createExpression())
-				end
-			end
-			
-			object = nodes.memberExpression(object, property, computed)
-		end
-		
-		return object
-	end
-	
-	-- Orders of prescidence
-	-- AsignmentExpression
-	-- MemberExpression
-	-- FunctionCall
-	-- LogicalExpression
-	-- ComparisonExpression
-	-- AdditiveExpression
-	-- MultiplicitiveExpression
-	-- UnaryExpression
-	-- PrimaryExpression
-	
-	function parser:parsePrimaryExpression()
-		local token = self.token
-		if token:is("IDENTIFIER") then
-			local prev = self.tokens[self.position-1]
-			if prev and prev:is("DOT") then
-				self:advance()
-				return nodes.identifier(token.tokenValue)
-			end
-			
-			local assignmentOperator = self.tokens[self.position+1]
-			local secondary = self.tokens[self.position+2]
-			if assignmentOperator.tokenValue == "=" then
-				self:advance()
-				self:advance()
-				local value = self:createExpression()
-				return nodes.variableAssignment(token.tokenValue, value)
-			elseif assignmentOperator:is("OPERATION") and secondary.tokenValue == "=" then
-				self:advance()
-				self:advance()
-				self:advance()
-				local value = self:createExpression()
-				return nodes.variableAssignment(token.tokenValue, value, assignmentOperator.tokenValue)
-			end
-			self:advance()
-			return nodes.identifier(token.tokenValue)
-		elseif token:is("NOT") then
-			self:advance()
-			return nodes.binaryExpression(nil, self:createExpression(), "not")
-		elseif token:is("NUMBER") then
-			self:advance()
-			return nodes.numericLiteral(tonumber(token.tokenValue))
-		elseif token:is("STRING") then
-			self:advance()
-			return nodes.stringLiteral(token.tokenValue, self.stringCharacter)
-		elseif token:is("LPAREN") then
-			self:advance()
-			local value = self:createExpression()
-			if not self.token:is("RPAREN") then
-				return self.runTime:runTimeError("syntaxError", "Expected closing parenthesis.")
-			end
-			self:advance()
-			return value
-		elseif token:is("KEYWORD") then
-			if token.tokenValue == "var" then
-				local identifierToken = self:advance()
-				local assignmentOperator = self:advance()
-				self:advance()
-				local value = self:createExpression()
-				return nodes.variableDeclaration(identifierToken.tokenValue, value)
-			elseif token.tokenValue == "function" then
-				local identifier: nodes.expression? = nil
-				
-				self:advance()
-				
-				if not self.token:is("LPAREN") then
-					local name = self:parseMemberExpression()
-					
-					if not name:is("identifier") and not name:is("memberExpression") then
-						self.runTime:runTimeError("syntaxError", `Cannot declare function name with anything other than a property of a table and an identifier.`)
-					end
-					
-					if name then
-						identifier = name
-					end
-				end
-				
-				local paramIdentifiers: {nodes.identifier} = self:parseCallArguments()
-				local parameters: {string} = {}
-				for index, identifier in ipairs(paramIdentifiers) do
-					if not identifier:is("identifier") then
-						self.runTime:runTimeError("syntaxError", `Inside function declaration expected parameter '{identifier.symbol}' to be of type string.`)
-					end
-					table.insert(parameters, identifier.symbol)
-				end
-				
-				if not self.token:is("LBRACKET") then
-					self.runTime:runTimeError("syntaxError", "Expected open bracket in function declaration for code block")
-				end
-				self:advance()
-				
-				local body: {nodes.node} = {}
-				
-				while not self.token:is("EOF") and not self.token:is("RBRACKET") do
-					table.insert(body, self:createStatement())
-				end
-				
-				if not self.token:is("RBRACKET") then
-					self.runTime:runTimeError("syntaxError", "Expected closing bracket to end function declaration & code block")
-				end
-				self:advance()
-				
-				return nodes.functionDeclaration(identifier, parameters, body)
-			elseif token.tokenValue == "return" then
-				self:advance()
-				local expr = nil
-				if self.token and not self.token:is("RBRACKET") and not self.token:is("EOF") and not self.token:is("RPAREN") then
-					expr = self:createStatement()
-				end
-				return nodes.returnStatement(expr)
-			elseif token.tokenValue == "break" then
-				self:advance()
-				local expr = nil
-				if self.token and not self.token:is("RBRACKET") and not self.token:is("EOF") and not self.token:is("RPAREN") then
-					expr = self:createStatement()
-				end
-				return nodes.breakStatement(expr)
-			elseif token.tokenValue == "continue" then
-				self:advance()
-				return nodes.continueStatement()
-			else
-				self:advance()
-			end
-		elseif token:is("RBRACKET") then
-			self:advance()
-		else
-			print("Position & tokens table: ", self.position, self.tokens)
-			return self.runTime:runTimeError("syntaxError", `Unexpected token '({token.tokenType}{token.tokenValue and `, {token.tokenValue}` or ""})' found during parsing!`)
-		end
-	end
-
-	return parser
+	return runTime
 end

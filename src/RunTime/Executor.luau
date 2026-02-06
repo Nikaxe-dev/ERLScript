@@ -24,14 +24,29 @@ return function(runTime): types.executor
 			local node: nodes.memberExpression = node
 			local tableValue = self:interpretAST(node.object, environment) :: value.tableValue
 
-			if tableValue.valueType ~= "table" then
+			if not table.find(value.tableTypes, tableValue.valueType) then
 				self.runTime:runTimeError("typeError", `Type of '{tableValue.valueType}' cannot be indexed.`)
 			end
-
-			if node.computed then
-				return tableValue.value[self:interpretAST(node.property, environment).value] or value.nilValue()
+			
+			if tableValue.valueType == "instance" then
+				local val: value.value<any>
+				if node.computed then
+					val = value.fromLuauValue(tableValue.value[self:interpretAST(node.property, environment).value], self.runTime)
+				else
+					val = value.fromLuauValue(tableValue.value[node.property.symbol], self.runTime)
+				end
+				if val.valueType == "luaFunction" then
+					val.takesSelf = true
+					val.usesLuaTypes = true
+					val.self = tableValue.value
+				end
+				return val
 			else
-				return tableValue.value[(node.property::nodes.identifier).symbol] or value.nilValue()
+				if node.computed then
+					return tableValue.value[self:interpretAST(node.property, environment).value] or value.nilValue()
+				else
+					return tableValue.value[(node.property::nodes.identifier).symbol] or value.nilValue()
+				end
 			end
 		elseif node:is("tableLiteral") then
 			local luaTable: {[string | number]: value.value<any>} = {}
@@ -55,7 +70,25 @@ return function(runTime): types.executor
 				return self:executeFunctionBody(functionValue.body, functionValue.parameters, arguments, functionValue.environment)
 			elseif functionValue.valueType == "luaFunction" then
 				local functionValue: value.luaFunctionValue = functionValue
-				return functionValue.value(unpack(arguments))
+				if functionValue.usesLuaTypes then
+					for i,v in ipairs(arguments) do
+						arguments[i] = value.toLuauValue(v)
+					end
+				end
+				
+				local ret
+				
+				if functionValue.takesSelf then
+					ret = functionValue.value(functionValue.self, unpack(arguments))
+				else
+					ret = functionValue.value(unpack(arguments))
+				end
+				
+				if functionValue.usesLuaTypes then
+					return value.fromLuauValue(ret)
+				else
+					return ret
+				end
 			else
 				self.runTime:runTimeError("typeError", `Type of '{functionValue.valueType}' cannot be called as a function.`)
 			end
@@ -221,7 +254,11 @@ return function(runTime): types.executor
 				if identifier.computed then
 					tableValue.value[self:interpretAST(identifier.property, environment).value] = value
 				else
-					tableValue.value[identifier.property.symbol] = value
+					if typeof(tableValue.value) == "table" then
+						tableValue.value[identifier.property.symbol] = value
+					else
+						tableValue.value[identifier.property.symbol] = value.value
+					end
 				end
 				return value
 			end

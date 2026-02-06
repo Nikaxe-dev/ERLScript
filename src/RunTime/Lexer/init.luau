@@ -31,7 +31,7 @@ return function(runTime: types.runTime)
 		local result = ""
 		for _=1,string.len(self.text) do
 			if not self.character then continue end
-			if string.match(self.character, "%a") or self.character == "_" then
+			if string.match(self.character, "%a") or self.character == "_" or tonumber(self.character) then
 				result ..= self.character
 				self:advance()
 			else
@@ -84,6 +84,9 @@ return function(runTime: types.runTime)
 		while self.character do
 			if self.character then
 				if not insideString then
+					local post = string.sub(self.text, self.position+1, self.position+1) or ""
+					local prev = string.sub(self.text, self.position-1, self.position-1) or ""
+					
 					if table.find({""," ", "\n", "\t"}, self.character) then
 					elseif self.character == "(" then
 						self:addToken(token("LPAREN"))
@@ -99,14 +102,15 @@ return function(runTime: types.runTime)
 						self:addToken(token("RBRACE"))
 					elseif self.character == "," then
 						self:addToken(token("COMMA"))
-					elseif self.character == "." then
-						local prev = string.sub(self.text, self.position-1, self.position-1)
-						local next = string.sub(self.text, self.position+1, self.position+1)
-						if prev and next then
-							if not tonumber(prev) and not tonumber(next) then
-								self:addToken(token("DOT"))
-							end
-						end
+					elseif self.character == "." and not tonumber(post) then
+						--local prev = string.sub(self.text, self.position-1, self.position-1)
+						--local next = string.sub(self.text, self.position+1, self.position+1)
+						--if prev and next then
+						--	if not tonumber(prev) and not tonumber(next) then
+						--		self:addToken(token("DOT"))
+						--	end
+						--end
+						self:addToken(token("DOT"))
 					elseif self:canMakeMultiCharacterToken("or") then
 						self:addToken(token("OPERATION", "or"))
 						self:advance()
@@ -136,7 +140,7 @@ return function(runTime: types.runTime)
 						self:addToken(token("COMPARE", self.character))
 					elseif string.match(self.character, "%a") or self.character == "_" then
 						self:addToken(self:makeIdentifier())
-					elseif tonumber(self.character) or self.character == "." or (self.character == "-" and tonumber(string.sub(self.text, self.position+1, self.position+1)) and not tonumber(string.sub(self.text, self.position-1, self.position-1))) then
+					elseif tonumber(self.character) or self.character == "." or (self.character == "-" and (tonumber(post) or post == ".") and not tonumber(prev)) then
 						self:addToken(self:makeNumber())
 					elseif table.find({"+","-","*","/","%"}, self.character) then
 						self:addToken(token("OPERATION", self.character))

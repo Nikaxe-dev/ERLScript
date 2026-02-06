@@ -62,7 +62,10 @@ export type parser = {
 export type runTimeSettings = {
 	globals: {
 		[string]: any
-	}
+	},
+	
+	allowRequireLUA: boolean,
+	allowInstances: boolean,
 }
 
 export type runTime = {
@@ -110,6 +113,7 @@ export type error =
 | "referenceError"
 | "syntaxError"
 | "timeoutError"
+| "permissionError"
 
 export type token = {
 	tokenType: tokenType,
