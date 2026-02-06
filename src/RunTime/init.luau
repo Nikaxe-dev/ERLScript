@@ -286,6 +286,73 @@ return function(settings: types.runTimeSettings)
 				return value.numberValue(#tableQuery.value)
 			end)
 		}))
+		
+		runTime.environment:declareVariable("Vector3", value.tableValue({
+			new = value.luaFunctionValue(function(x: value.numberValue, y: value.numberValue, z: value.numberValue)
+				x = x or value.numberValue(0)
+				y = y or value.numberValue(0)
+				z = z or value.numberValue(0)
+				return value.vector3Value(Vector3.new(x.value, y.value, z.value))
+			end)
+		}))
+		
+		runTime.environment:declareVariable("Vector2", value.tableValue({
+			new = value.luaFunctionValue(function(x: value.numberValue, y: value.numberValue)
+				x = x or value.numberValue(0)
+				y = y or value.numberValue(0)
+				return value.vector3Value(Vector2.new(x.value, y.value))
+			end)
+		}))
+		
+		runTime.environment:declareVariable("UDim2", value.tableValue({
+			new = value.luaFunctionValue(function(xScale: value.numberValue, xOffset: value.numberValue, yScale: value.numberValue, yOffset: value.numberValue)
+				xScale = xScale and xScale.value or 0
+				xOffset = xOffset and xOffset.value or 0
+				yScale = yScale and yScale.value or 0
+				yOffset = yOffset and yOffset.value or 0
+				return value.udim2Value(UDim2.new(xScale, xOffset, yScale, yOffset))
+			end),
+			
+			fromScale = value.luaFunctionValue(function(xScale: value.numberValue, yScale: value.numberValue)
+				xScale = xScale and xScale.value or 0
+				yScale = yScale and yScale.value or 0
+				return value.udim2Value(UDim2.fromScale(xScale, yScale))
+			end),
+			
+			fromOffset = value.luaFunctionValue(function(xOffset: value.numberValue, yOffset: value.numberValue)
+				xOffset = xOffset and xOffset.value or 0
+				yOffset = yOffset and yOffset.value or 0
+				return value.udim2Value(UDim2.fromOffset(xOffset, yOffset))
+			end)
+		}))
+		
+		runTime.environment:declareVariable("UDim", value.tableValue({
+			new = value.luaFunctionValue(function(scale: value.numberValue, offset: value.numberValue)
+				scale = scale and scale.value or 0
+				offset = offset and offset.value or 0
+				return value.udimValue(UDim.new(scale,offset))
+			end)
+		}))
+		
+		if runTime.settings.allowInstances then
+			runTime.environment:declareVariable("Instance", value.tableValue({
+				new = value.luaFunctionValue(function(instanceType: value.stringValue, parent: value.instanceValue)
+					return value.instanceValue(Instance.new(instanceType.value, parent and parent.value or parent))
+				end)
+			}))
+			
+			self.environment:declareVariable("workspace", value.instanceValue(workspace))
+			self.environment:declareVariable("game", value.instanceValue(game))
+		end
+		
+		runTime.environment:declareVariable("requireLUA", value.luaFunctionValue(function(input: value.value<any>)
+			if not runTime.settings.allowRequireLUA then
+				runTime:runTimeError("permissionError", "Not allowed to use requireLUA()")
+			end
+			
+			local module = require(input.value)
+			return value.fromLuauValue(module, runTime)
+		end))
 
 		self.environment:declareVariable("true", value.booleanValue(true))
 		self.environment:declareVariable("false", value.booleanValue(false))
