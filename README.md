@@ -1,3 +1,8 @@
+**THIS PROJECT IS ARCHIVED**
+
+I do not use Roblox anymore. If you want you can fork this repository, although you should really just write your own version as this project was not done well imo.
+Please consider supporting the new version of my old Roblox game built in Godot, Fling And Fight!
+
 # [ERLScript] [V1.2] - Interpreted lua-like programming language
 
 ERLScript is a programming language designed to be easily executed in roblox, being decently customizable & able to be ran multiple times in a single script. Please expect bugs, as this is a new type of project for me, and has been done in my free time.
